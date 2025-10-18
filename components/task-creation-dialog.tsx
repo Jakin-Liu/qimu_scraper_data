@@ -57,7 +57,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
 
       toast({
         title: "任务创建成功",
-        description: `任务ID: ${data.taskId}`,
+        description: `任务ID: ${data.taskId}，请在任务列表中点击启动按钮开始处理`,
       })
 
       setUrlsText("")

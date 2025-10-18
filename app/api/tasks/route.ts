@@ -1,18 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-// 使用内存存储任务（生产环境应使用数据库）
-const tasks = new Map<
-  string,
-  {
-    id: string
-    status: "pending" | "processing" | "completed" | "failed"
-    urls: string[]
-    createdAt: string
-    completedAt?: string
-    csvUrl?: string
-    error?: string
-  }
->()
+import { taskQueries, scrapingResultQueries } from "@/lib/db"
+import { scrapeFastMossData } from "@/lib/fastmoss-scraper"
 
 // 生成唯一ID
 function generateId() {
@@ -21,11 +9,25 @@ function generateId() {
 
 // GET - 获取所有任务
 export async function GET() {
-  const taskList = Array.from(tasks.values())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map(({ token, ...task }) => task) // 不返回token信息
+  try {
+    const tasks = await taskQueries.getAllTasks()
+    
+    // 转换数据格式以匹配前端期望
+    const taskList = tasks.map(task => ({
+      id: task.id,
+      status: task.status,
+      urls: task.urls,
+      createdAt: task.created_at,
+      completedAt: task.completed_at,
+      csvUrl: task.csv_url,
+      error: task.error
+    }))
 
-  return NextResponse.json({ tasks: taskList })
+    return NextResponse.json({ tasks: taskList })
+  } catch (error) {
+    console.error('获取任务列表失败:', error)
+    return NextResponse.json({ error: "获取任务列表失败" }, { status: 500 })
+  }
 }
 
 // POST - 创建新任务
@@ -39,101 +41,81 @@ export async function POST(request: NextRequest) {
     }
 
     const taskId = generateId()
-    const task = {
-      id: taskId,
-      status: "pending" as const,
-      urls,
-      createdAt: new Date().toISOString(),
-    }
-
-    tasks.set(taskId, task)
-
-    // 异步启动抓取任务
-    startScraping(taskId)
+    
+    // 在数据库中创建任务
+    await taskQueries.createTask(taskId, urls)
 
     return NextResponse.json({
       taskId,
       message: "任务创建成功",
     })
   } catch (error) {
+    console.error('创建任务失败:', error)
     return NextResponse.json({ error: "创建任务失败" }, { status: 500 })
+  }
+}
+
+// PUT - 启动任务
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { taskId } = body
+
+    if (!taskId) {
+      return NextResponse.json({ error: "缺少必要参数: taskId" }, { status: 400 })
+    }
+
+    // 检查任务是否存在
+    const task = await taskQueries.getTaskById(taskId)
+    if (!task) {
+      return NextResponse.json({ error: "任务不存在" }, { status: 404 })
+    }
+
+    // 检查任务状态
+    if (task.status !== 'pending') {
+      return NextResponse.json({ 
+        error: `任务状态为 ${task.status}，无法启动。只有等待中的任务可以启动` 
+      }, { status: 400 })
+    }
+
+    // 异步启动抓取任务
+    startScraping(taskId)
+
+    return NextResponse.json({
+      message: "任务启动成功",
+      taskId
+    })
+  } catch (error) {
+    console.error('启动任务失败:', error)
+    return NextResponse.json({ error: "启动任务失败" }, { status: 500 })
   }
 }
 
 // 后台抓取函数
 async function startScraping(taskId: string) {
-  const task = tasks.get(taskId)
-  if (!task) return
-
-  // 更新状态为处理中
-  task.status = "processing"
-  tasks.set(taskId, task)
-
   try {
-    // 模拟数据抓取过程
-    const scrapedData: Array<{ url: string; title: string; content: string; timestamp: string }> = []
+    // 更新状态为处理中
+    await taskQueries.updateTaskStatus(taskId, "processing")
 
-    for (const url of task.urls) {
-      try {
-        const response = await fetch(url)
+    // 获取任务信息
+    const task = await taskQueries.getTaskById(taskId)
+    if (!task) return
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
+    console.log(`开始抓取任务 ${taskId}，URLs: ${task.urls.join(', ')}`)
 
-        const html = await response.text()
+    // 使用FastMoss抓取服务
+    const scrapingResults = await scrapeFastMossData(taskId, task.urls)
+    
+    console.log(`任务 ${taskId} 抓取完成，共获得 ${scrapingResults.length} 条结果`)
+    console.log(`任务 ${taskId} 数据已实时写入数据库`)
 
-        // 简单提取标题（实际应用中应使用更复杂的解析）
-        const titleMatch = html.match(/<title>(.*?)<\/title>/i)
-        const title = titleMatch ? titleMatch[1] : "No title"
-
-        scrapedData.push({
-          url,
-          title,
-          content: html.substring(0, 500), // 截取前500字符
-          timestamp: new Date().toISOString(),
-        })
-
-        // 模拟处理延迟
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      } catch (error) {
-        scrapedData.push({
-          url,
-          title: "Error",
-          content: error instanceof Error ? error.message : "Unknown error",
-          timestamp: new Date().toISOString(),
-        })
-      }
-    }
-
-    // 生成CSV
-    const csvContent = generateCSV(scrapedData)
-    const csvUrl = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`
-
-    // 更新任务状态
-    task.status = "completed"
-    task.completedAt = new Date().toISOString()
-    task.csvUrl = csvUrl
-    tasks.set(taskId, task)
+    // 更新任务状态为完成（不生成CSV）
+    await taskQueries.updateTaskStatus(taskId, "completed")
+    console.log(`任务 ${taskId} 处理完成`)
   } catch (error) {
-    task.status = "failed"
-    task.error = error instanceof Error ? error.message : "未知错误"
-    task.completedAt = new Date().toISOString()
-    tasks.set(taskId, task)
+    console.error(`任务 ${taskId} 处理失败:`, error)
+    // 更新任务状态为失败
+    await taskQueries.updateTaskStatus(taskId, "failed", undefined, error instanceof Error ? error.message : "未知错误")
   }
 }
 
-// 生成CSV内容
-function generateCSV(data: Array<{ url: string; title: string; content: string; timestamp: string }>) {
-  const headers = ["URL", "Title", "Content", "Timestamp"]
-  const rows = data.map((item) => [
-    item.url,
-    item.title.replace(/"/g, '""'), // 转义双引号
-    item.content.replace(/"/g, '""'),
-    item.timestamp,
-  ])
-
-  const csvLines = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))]
-
-  return csvLines.join("\n")
-}
