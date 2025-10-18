@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       fm_sign: currentAuth.fm_sign.substring(0, 10) + '...' // 只显示前10个字符
     })
   } catch (error) {
+    // 是
     console.error('获取认证状态失败:', error)
     return NextResponse.json({ 
       error: "获取认证状态失败" 
