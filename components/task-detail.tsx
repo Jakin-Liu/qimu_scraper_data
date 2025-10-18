@@ -60,6 +60,7 @@ interface TaskDetailProps {
 export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const [progress, setProgress] = useState<TaskProgress[]>([])
   const [summary, setSummary] = useState<TaskProgressSummary | null>(null)
+  const [taskUrls, setTaskUrls] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [copiedUrls, setCopiedUrls] = useState<Set<number>>(new Set())
   const { toast } = useToast()
@@ -71,6 +72,7 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
       const data = await response.json()
       setProgress(data.progress)
       setSummary(data.summary)
+      setTaskUrls(data.taskUrls || [])
       
       // 如果是手动刷新，显示成功提示
       if (showSuccessToast) {
@@ -174,6 +176,11 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const getPageProgress = (currentPage: number, totalPages: number) => {
     if (totalPages === 0) return 0
     return Math.round((currentPage / totalPages) * 100)
+  }
+
+  // 获取URL对应的进度记录
+  const getProgressForUrl = (url: string) => {
+    return progress.find(p => p.url === url)
   }
 
 
@@ -339,17 +346,19 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {progress.map((item, index) => (
-                  <div key={item.id} className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 rounded-xl p-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-all duration-200">
+                {taskUrls.map((url, index) => {
+                  const progressItem = getProgressForUrl(url)
+                  return (
+                    <div key={url} className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 rounded-xl p-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-all duration-200">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-3">
                           <Badge 
-                            variant={getStatusVariant(item.status)} 
+                            variant={progressItem ? getStatusVariant(progressItem.status) : "secondary"} 
                             className="gap-2 px-3 py-1 text-sm font-medium"
                           >
-                            {getStatusIcon(item.status)}
-                            {getStatusText(item.status)}
+                            {progressItem ? getStatusIcon(progressItem.status) : <Clock className="h-3 w-3" />}
+                            {progressItem ? getStatusText(progressItem.status) : "未开始"}
                           </Badge>
                           <span className="text-sm text-muted-foreground bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded-full">
                             #{index + 1}
@@ -362,10 +371,10 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleCopyUrl(item.url, item.id)}
+                              onClick={() => handleCopyUrl(url, index)}
                               className="h-6 px-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-700"
                             >
-                              {copiedUrls.has(item.id) ? (
+                              {copiedUrls.has(index) ? (
                                 <Check className="h-3 w-3 text-green-600" />
                               ) : (
                                 <Copy className="h-3 w-3" />
@@ -373,7 +382,7 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                             </Button>
                           </div>
                           <div className="text-sm font-mono break-all text-slate-700 dark:text-slate-300">
-                            {item.url}
+                            {url}
                           </div>
                         </div>
                         
@@ -382,11 +391,11 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                           <div className="flex justify-between items-center">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">抓取进度</span>
                             <span className="text-sm font-bold text-primary">
-                              {item.currentPage} / {item.totalPages}
+                              {progressItem ? `${progressItem.currentPage} / ${progressItem.totalPages}` : "0 / 0"}
                             </span>
                           </div>
                           <Progress 
-                            value={getPageProgress(item.currentPage, item.totalPages)} 
+                            value={progressItem ? getPageProgress(progressItem.currentPage, progressItem.totalPages) : 0} 
                             className="h-2 bg-slate-200 dark:bg-slate-700" 
                           />
                         </div>
@@ -395,7 +404,7 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(item.url, '_blank')}
+                        onClick={() => window.open(url, '_blank')}
                         className="ml-4 hover:bg-primary hover:text-primary-foreground transition-colors"
                       >
                         <ExternalLink className="h-4 w-4 mr-2" />
@@ -410,46 +419,47 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                           <Clock className="h-4 w-4 text-blue-500" />
                           <span className="font-medium text-slate-700 dark:text-slate-300">开始时间</span>
                         </div>
-                        <div className="text-xs text-muted-foreground">{formatTime(item.startedAt)}</div>
+                        <div className="text-xs text-muted-foreground">{progressItem ? formatTime(progressItem.startedAt) : "未开始"}</div>
                       </div>
                       
-                      {item.completedAt && (
+                      {progressItem?.completedAt && (
                         <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border">
                           <div className="flex items-center gap-2 mb-1">
                             <CheckCircle2 className="h-4 w-4 text-green-500" />
                             <span className="font-medium text-slate-700 dark:text-slate-300">完成时间</span>
                           </div>
-                          <div className="text-xs text-muted-foreground">{formatTime(item.completedAt)}</div>
+                          <div className="text-xs text-muted-foreground">{formatTime(progressItem.completedAt)}</div>
                         </div>
                       )}
                       
-                      {item.errorAt && (
+                      {progressItem?.errorAt && (
                         <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border">
                           <div className="flex items-center gap-2 mb-1">
                             <XCircle className="h-4 w-4 text-red-500" />
                             <span className="font-medium text-slate-700 dark:text-slate-300">错误时间</span>
                           </div>
-                          <div className="text-xs text-muted-foreground">{formatTime(item.errorAt)}</div>
+                          <div className="text-xs text-muted-foreground">{formatTime(progressItem.errorAt)}</div>
                         </div>
                       )}
                     </div>
                     
                     {/* 错误信息 */}
-                    {item.errorMessage && (
+                    {progressItem?.errorMessage && (
                       <div className="mt-4 bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                         <div className="flex items-start gap-3">
                           <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                           <div className="flex-1">
                             <div className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">错误详情</div>
                             <div className="text-sm text-red-700 dark:text-red-400 bg-white dark:bg-slate-800 p-3 rounded border">
-                              {item.errorMessage}
+                              {progressItem.errorMessage}
                             </div>
                           </div>
                         </div>
                       </div>
                     )}
-                  </div>
-                ))}
+                    </div>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>

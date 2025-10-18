@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { taskProgressQueries } from "@/lib/db"
+import { taskProgressQueries, taskQueries } from "@/lib/db"
 
 // GET - 获取任务进度
 export async function GET(
@@ -8,6 +8,12 @@ export async function GET(
 ) {
   try {
     const { taskId } = await params
+
+    // 获取任务信息
+    const task = await taskQueries.getTaskById(taskId)
+    if (!task) {
+      return NextResponse.json({ error: "任务不存在" }, { status: 404 })
+    }
 
     // 获取任务的所有进度记录
     const progressList = await taskProgressQueries.getProgressByTaskId(taskId)
@@ -28,8 +34,8 @@ export async function GET(
       updatedAt: progress.updated_at
     }))
 
-    // 计算总体进度统计
-    const totalUrls = progressList.length
+    // 从任务的urls字段获取总URL数
+    const totalUrls = task.urls ? task.urls.length : 0
     const completedUrls = progressList.filter(p => p.status === 'completed').length
     const failedUrls = progressList.filter(p => p.status === 'failed').length
     const processingUrls = progressList.filter(p => p.status === 'processing').length
@@ -49,7 +55,8 @@ export async function GET(
         totalPages,
         maxPages,
         completionRate: totalUrls > 0 ? Math.round((completedUrls / totalUrls) * 100) : 0
-      }
+      },
+      taskUrls: task.urls || []
     })
   } catch (error) {
     console.error('获取任务进度失败:', error)
