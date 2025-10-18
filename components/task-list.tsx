@@ -16,6 +16,7 @@ interface Task {
   completedAt?: string
   csvUrl?: string
   error?: string
+  remark?: string
 }
 
 interface TaskListProps {
@@ -263,8 +264,8 @@ export function TaskList({ filterStatus }: TaskListProps) {
                 onClick={() => handleViewDetail(task.id)}
               >
                 <div className="flex items-start justify-between gap-3">
-                  {/* 左侧区域 - 包含hover时显示的URL明细 */}
-                  <div className="flex-1 min-w-0 group relative">
+                  {/* 左侧区域 */}
+                  <div className="flex-1 min-w-0 relative">
                     <div className="flex items-start gap-2 mb-3">
                       <Badge variant={getStatusVariant(task.status)} className="gap-1 flex-shrink-0">
                         {getStatusIcon(task.status)}
@@ -294,30 +295,54 @@ export function TaskList({ filterStatus }: TaskListProps) {
                             {copiedTasks.has(task.id) ? "已复制" : "复制任务ID"}
                           </TooltipContent>
                         </Tooltip>
+                        
+                        {/* 备注显示在ID右侧 */}
+                        {task.remark && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div 
+                                className="text-xs text-muted-foreground bg-muted/30 rounded px-2 py-1 max-w-[200px] truncate cursor-help hover:bg-muted/50 transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {task.remark.length > 35 ? `${task.remark.substring(0, 35)}...` : task.remark}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[400px] z-[60]">
+                              <div className="text-sm">
+                                <div className="font-medium mb-1">任务备注：</div>
+                                <div className="break-words">{task.remark}</div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     </div>
                     
                     {/* 基本信息 - 始终显示 */}
                     <div className="text-sm text-muted-foreground space-y-1">
-                      <p>URLs: {task.urls.length} 个</p>
+                      {/* URLs行 - 添加hover触发区域 */}
+                      <div className="relative group">
+                        <p className="cursor-help">URLs: {task.urls.length} 个</p>
+                        
+                        {/* URL明细 - 只在hover URLs文字时显示，绝对定位在卡片外部 */}
+                        <div className="url-details absolute left-0 top-full mt-2 z-40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
+                          <div className="bg-popover border rounded-lg shadow-lg p-4 w-96 max-w-[90vw]">
+                            <p className="font-semibold text-sm mb-3 text-foreground">抓取的URLs ({task.urls.length}):</p>
+                            <ul className="space-y-2 text-xs max-h-64 overflow-y-auto">
+                              {task.urls.map((url, index) => (
+                                <li key={index} className="break-all text-muted-foreground hover:text-foreground transition-colors">
+                                  <span className="text-muted-foreground mr-2">{index + 1}.</span>
+                                  {url}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <p>创建时间: {new Date(task.createdAt).toLocaleString("zh-CN")}</p>
                       {task.completedAt && <p>完成时间: {new Date(task.completedAt).toLocaleString("zh-CN")}</p>}
                       {task.error && <p className="text-destructive">错误: {task.error}</p>}
-                    </div>
-                    
-                    {/* URL明细 - 只在hover左侧区域时显示，绝对定位在卡片外部 */}
-                    <div className="absolute left-0 top-full mt-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
-                      <div className="bg-popover border rounded-lg shadow-lg p-4 w-96 max-w-[90vw]">
-                        <p className="font-semibold text-sm mb-3 text-foreground">抓取的URLs ({task.urls.length}):</p>
-                        <ul className="space-y-2 text-xs max-h-64 overflow-y-auto">
-                          {task.urls.map((url, index) => (
-                            <li key={index} className="break-all text-muted-foreground hover:text-foreground transition-colors">
-                              <span className="text-muted-foreground mr-2">{index + 1}.</span>
-                              {url}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
                     </div>
                   </div>
                   

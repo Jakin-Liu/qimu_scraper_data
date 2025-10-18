@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { taskQueries, scrapingResultQueries } from "@/lib/db"
 import { scrapeFastMossData } from "@/lib/fastmoss-scraper"
+import { v4 as uuidv4 } from "uuid"
 
 // 生成唯一ID
 function generateId() {
-  return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return uuidv4()
 }
 
 // GET - 获取所有任务
@@ -20,7 +21,8 @@ export async function GET() {
       createdAt: task.created_at,
       completedAt: task.completed_at,
       csvUrl: task.csv_url,
-      error: task.error
+      error: task.error,
+      remark: task.remark
     }))
 
     return NextResponse.json({ tasks: taskList })
@@ -34,7 +36,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { urls } = body
+    const { urls, remark } = body
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json({ error: "缺少必要参数" }, { status: 400 })
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
     const taskId = generateId()
     
     // 在数据库中创建任务
-    await taskQueries.createTask(taskId, urls)
+    await taskQueries.createTask(taskId, urls, remark)
 
     return NextResponse.json({
       taskId,

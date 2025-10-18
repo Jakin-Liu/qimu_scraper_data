@@ -234,7 +234,7 @@ const DEFAULT_CREDENTIALS: LoginCredentials = {
 
 // 抓取配置
 const SCRAPING_CONFIG = {
-  DEFAULT_MAX_PAGES: 2, // 默认最大页数：100万页 1000000
+  DEFAULT_MAX_PAGES: 1000000, // 默认最大页数：100万页 1000000
   PAGE_SIZE: 5, // 每页数据量
   REQUEST_DELAY: 1000, // 请求间延迟（毫秒）
   FAILURE_DELAY: 2000, // 失败后延迟（毫秒）
@@ -296,12 +296,13 @@ function extractProductId(url: string): string | null {
 
 // 抓取商品作者数据（支持翻页，实时写入数据库，进度跟踪）
 async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskId: string, url: string, maxPages: number = SCRAPING_CONFIG.DEFAULT_MAX_PAGES): Promise<ScrapingResult[]> {
+  const allResults: ScrapingResult[] = []
+  let page = 1
+  let hasMoreData = true
+  let consecutiveFailures = 0
+  const maxConsecutiveFailures = SCRAPING_CONFIG.MAX_CONSECUTIVE_FAILURES
+  
   try {
-    const allResults: ScrapingResult[] = []
-    let page = 1
-    let hasMoreData = true
-    let consecutiveFailures = 0
-    const maxConsecutiveFailures = SCRAPING_CONFIG.MAX_CONSECUTIVE_FAILURES
     
     console.log(`开始抓取商品 ${productId} 的作者数据（最多${maxPages}页）...`)
     
@@ -310,7 +311,7 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
       taskId,
       url,
       currentPage: 0,
-      totalPages: maxPages,
+      totalPages: 0, // 初始时设为0，完成时更新为实际页数
       status: 'processing',
       startedAt: new Date().toISOString()
     })
@@ -348,11 +349,15 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
         }
 
         // 转换销售额显示格式为数字
-        const convertSaleAmount = (saleAmountShow: string | null): number => {
-          if (!saleAmountShow) return 0
+        const convertSaleAmount = (saleAmountShow: string | null | undefined): number => {
+          // 处理空值、null、undefined或空字符串
+          if (!saleAmountShow || saleAmountShow.trim() === '') return 0
           
           // 去掉英文前缀（如RM、$等）
           let amount = saleAmountShow.replace(/^[A-Za-z$]+\s*/, '')
+          
+          // 如果去掉前缀后为空，返回0
+          if (amount.trim() === '') return 0
           
           // 处理万、千等单位
           if (amount.includes('万')) {
@@ -371,17 +376,27 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
         // 解析当前页数据
         const pageResults: ScrapingResult[] = []
         for (const item of data.data.list) {
+          // 处理销量数据，确保没有数据或为0时记录为0
+          const salesCount = item.sold_count !== null && item.sold_count !== undefined 
+            ? Number(item.sold_count) || 0 
+            : 0
+
+          // 处理销售额数据，确保没有数据或为0时记录为0
+          const salesAmount = convertSaleAmount(item.sale_amount_show)
+
           const result: ScrapingResult = {
             taskId: taskId,
             taskUrl: `https://www.fastmoss.com/zh/e-commerce/detail/${productId}`,
-            influencerName: item.nickname,
-            influencerFollowers: item.follower_count,
-            countryRegion: item.region,
-            fastmossDetailUrl: `https://www.fastmoss.com/zh/influencer/detail/${item.uid}`,
-            productSalesCount: item.sold_count,
-            productSalesAmount: convertSaleAmount(item.sale_amount_show),
-            influencerId: item.unique_id,
-            saleAmountShow: item.sale_amount_show,
+            influencerName: item.nickname || '',
+            influencerFollowers: item.follower_count !== null && item.follower_count !== undefined 
+              ? Number(item.follower_count) || 0 
+              : 0,
+            countryRegion: item.region || '',
+            fastmossDetailUrl: `https://www.fastmoss.com/zh/influencer/detail/${item.uid || ''}`,
+            productSalesCount: salesCount,
+            productSalesAmount: salesAmount,
+            influencerId: item.unique_id || '',
+            saleAmountShow: item.sale_amount_show || '',
             rawData: item,
             status: 'active'
           }
@@ -412,23 +427,29 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
         if (pageResults.length < SCRAPING_CONFIG.PAGE_SIZE) {
           console.log(`第 ${page} 页数据不足${SCRAPING_CONFIG.PAGE_SIZE}条（${pageResults.length}/${SCRAPING_CONFIG.PAGE_SIZE}），停止翻页`)
           hasMoreData = false
-          // 更新进度状态为完成
+          // 更新进度状态为完成，并设置最终页数为实际抓取的页数
           await taskProgressQueries.updateProgressStatus(
             taskId, 
             url, 
             'completed', 
             new Date().toISOString()
           )
+          // 更新最终页数为实际抓取的页数
+          await taskProgressQueries.updatePageProgress(taskId, url, page, page)
+          console.log(`任务 ${taskId} 的 URL ${url} 已完成，实际抓取页数: ${page}`)
         } else if (page >= maxPages) {
           console.log(`已达到最大页数限制（${maxPages}页），停止翻页`)
           hasMoreData = false
-          // 更新进度状态为完成
+          // 更新进度状态为完成，并设置最终页数为最大页数限制
           await taskProgressQueries.updateProgressStatus(
             taskId, 
             url, 
             'completed', 
             new Date().toISOString()
           )
+          // 更新最终页数为最大页数限制
+          await taskProgressQueries.updatePageProgress(taskId, url, page, maxPages)
+          console.log(`任务 ${taskId} 的 URL ${url} 已完成，达到最大页数限制: ${maxPages}`)
         } else {
           page++
           console.log(`准备抓取第 ${page} 页...`)
@@ -444,7 +465,7 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
         if (consecutiveFailures >= maxConsecutiveFailures) {
           console.log(`连续失败 ${consecutiveFailures} 次，停止抓取`)
           hasMoreData = false
-          // 更新进度状态为失败
+          // 更新进度状态为失败，并设置总页数为失败时的页数
           await taskProgressQueries.updateProgressStatus(
             taskId, 
             url, 
@@ -453,6 +474,9 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
             new Date().toISOString(),
             `连续失败 ${consecutiveFailures} 次: ${error instanceof Error ? error.message : '未知错误'}`
           )
+          // 更新总页数为失败时的页数
+          await taskProgressQueries.updatePageProgress(taskId, url, page, page)
+          console.log(`任务 ${taskId} 的 URL ${url} 因连续失败而停止，已抓取页数: ${page}`)
           break
         }
         
@@ -464,11 +488,17 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
       }
     }
 
-    console.log(`商品 ${productId} 抓取完成，共获得 ${allResults.length} 条记录`)
+    // 如果循环正常结束（没有因为错误而停止），确保设置完成状态
+    if (hasMoreData === false) {
+      console.log(`商品 ${productId} 抓取正常完成，共获得 ${allResults.length} 条记录`)
+    } else {
+      console.log(`商品 ${productId} 抓取完成，共获得 ${allResults.length} 条记录`)
+    }
+    
     return allResults
   } catch (error) {
     console.error(`抓取商品 ${productId} 的作者数据失败:`, error)
-    // 更新进度状态为失败
+    // 更新进度状态为失败，并设置总页数为当前页数
     await taskProgressQueries.updateProgressStatus(
       taskId, 
       url, 
@@ -477,6 +507,10 @@ async function scrapeProductAuthors(productId: string, authInfo: AuthInfo, taskI
       new Date().toISOString(),
       error instanceof Error ? error.message : '未知错误'
     )
+    // 更新总页数为当前页数（如果page未定义则设为1）
+    const currentPage = page || 1
+    await taskProgressQueries.updatePageProgress(taskId, url, currentPage, currentPage)
+    console.log(`任务 ${taskId} 的 URL ${url} 因异常而停止，已抓取页数: ${currentPage}`)
     throw error
   }
 }

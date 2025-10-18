@@ -15,7 +15,7 @@ export const taskQueries = {
     const client = await pool.connect()
     try {
       const result = await client.query(`
-        SELECT id, status, urls, created_at, completed_at, csv_url, error
+        SELECT id, status, urls, created_at, completed_at, csv_url, error, remark
         FROM tasks
         ORDER BY created_at DESC
       `)
@@ -30,7 +30,7 @@ export const taskQueries = {
     const client = await pool.connect()
     try {
       const result = await client.query(`
-        SELECT id, status, urls, created_at, completed_at, csv_url, error
+        SELECT id, status, urls, created_at, completed_at, csv_url, error, remark
         FROM tasks
         WHERE id = $1
       `, [id])
@@ -41,14 +41,14 @@ export const taskQueries = {
   },
 
   // 创建新任务
-  async createTask(id: string, urls: string[]) {
+  async createTask(id: string, urls: string[], remark?: string) {
     const client = await pool.connect()
     try {
       const result = await client.query(`
-        INSERT INTO tasks (id, status, urls)
-        VALUES ($1, 'pending', $2)
-        RETURNING id, status, urls, created_at
-      `, [id, urls])
+        INSERT INTO tasks (id, status, urls, remark)
+        VALUES ($1, 'pending', $2, $3)
+        RETURNING id, status, urls, created_at, remark
+      `, [id, urls, remark || null])
       return result.rows[0]
     } finally {
       client.release()
@@ -330,16 +330,31 @@ export const taskProgressQueries = {
   },
 
   // 更新进度页数
-  async updatePageProgress(taskId: string, url: string, currentPage: number) {
+  async updatePageProgress(taskId: string, url: string, currentPage: number, totalPages?: number) {
     const client = await pool.connect()
     try {
-      const result = await client.query(`
+      let query = `
         UPDATE task_progress 
         SET current_page = $3, updated_at = NOW()
+      `
+      let params = [taskId, url, currentPage]
+      
+      // 如果提供了总页数，也更新总页数
+      if (totalPages !== undefined) {
+        query = `
+          UPDATE task_progress 
+          SET current_page = $3, total_pages = $4, updated_at = NOW()
+        `
+        params = [taskId, url, currentPage, totalPages]
+      }
+      
+      query += `
         WHERE task_id = $1 AND url = $2
         RETURNING id, task_id, url, current_page, total_pages, status, 
                   started_at, completed_at, error_at, error_message, created_at, updated_at
-      `, [taskId, url, currentPage])
+      `
+      
+      const result = await client.query(query, params)
       return result.rows[0]
     } finally {
       client.release()

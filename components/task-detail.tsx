@@ -20,7 +20,9 @@ import {
   Timer,
   TrendingUp,
   Activity,
-  Target
+  Target,
+  Copy,
+  Check
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -59,6 +61,7 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const [progress, setProgress] = useState<TaskProgress[]>([])
   const [summary, setSummary] = useState<TaskProgressSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [copiedUrls, setCopiedUrls] = useState<Set<number>>(new Set())
   const { toast } = useToast()
 
   const fetchProgress = async (showSuccessToast = false) => {
@@ -84,6 +87,34 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleCopyUrl = async (url: string, itemId: number) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedUrls(prev => new Set(prev).add(itemId))
+      
+      toast({
+        title: "复制成功",
+        description: "URL已复制到剪贴板",
+      })
+      
+      // 2秒后重置复制状态
+      setTimeout(() => {
+        setCopiedUrls(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(itemId)
+          return newSet
+        })
+      }, 2000)
+    } catch (error) {
+      console.error("复制失败:", error)
+      toast({
+        title: "复制失败",
+        description: "无法复制URL到剪贴板",
+        variant: "destructive",
+      })
     }
   }
 
@@ -326,7 +357,21 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                         </div>
                         
                         <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border mb-4">
-                          <div className="text-sm text-muted-foreground mb-1">目标URL</div>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="text-sm text-muted-foreground">目标URL</div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCopyUrl(item.url, item.id)}
+                              className="h-6 px-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                              {copiedUrls.has(item.id) ? (
+                                <Check className="h-3 w-3 text-green-600" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
                           <div className="text-sm font-mono break-all text-slate-700 dark:text-slate-300">
                             {item.url}
                           </div>

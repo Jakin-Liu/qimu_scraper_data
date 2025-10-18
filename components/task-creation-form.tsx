@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Plus, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export function TaskCreationForm() {
   const [token, setToken] = useState("")
   const [urls, setUrls] = useState<string[]>([""])
+  const [remark, setRemark] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
 
@@ -64,6 +66,7 @@ export function TaskCreationForm() {
         body: JSON.stringify({
           token,
           urls: validUrls,
+          remark: remark.trim() || undefined,
         }),
       })
 
@@ -147,6 +150,18 @@ export function TaskCreationForm() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="remark">备注（可选）</Label>
+            <Textarea
+              id="remark"
+              placeholder="输入任务备注信息..."
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              disabled={isSubmitting}
+              rows={3}
+            />
           </div>
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>

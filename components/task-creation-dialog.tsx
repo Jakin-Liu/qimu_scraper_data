@@ -16,6 +16,7 @@ interface TaskCreationDialogProps {
 
 export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogProps) {
   const [urlsText, setUrlsText] = useState("")
+  const [remark, setRemark] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
 
@@ -46,6 +47,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
         },
         body: JSON.stringify({
           urls,
+          remark: remark.trim() || undefined,
         }),
       })
 
@@ -61,6 +63,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
       })
 
       setUrlsText("")
+      setRemark("")
 
       onOpenChange(false)
 
@@ -78,44 +81,118 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>创建抓取任务</DialogTitle>
-          <DialogDescription>输入目标URLs开始数据抓取</DialogDescription>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div>
+              <DialogTitle className="text-2xl font-bold">创建抓取任务</DialogTitle>
+              <DialogDescription className="text-base mt-1">
+                输入目标URLs开始数据抓取，支持批量处理多个商品页面
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-          <div className="space-y-2">
-            <Label htmlFor="urls">目标URLs</Label>
-            <Textarea
-              id="urls"
-              placeholder="每行输入一个URL&#10;https://example.com/page1&#10;https://example.com/page2&#10;https://example.com/page3"
-              value={urlsText}
-              onChange={(e) => setUrlsText(e.target.value)}
-              disabled={isSubmitting}
-              rows={8}
-              className="font-mono text-sm"
-            />
-            <p className="text-xs text-muted-foreground">每行输入一个URL，支持多个URL</p>
+        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+          {/* URL输入区域 */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="urls" className="text-base font-semibold flex items-center gap-2">
+                <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                目标URLs
+              </Label>
+              <div className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded-md">
+                {urlsText.split('\n').filter(url => url.trim()).length} 个URL
+              </div>
+            </div>
+            <div className="relative">
+              <Textarea
+                id="urls"
+                placeholder="每行输入一个FastMoss商品页面URL&#10;https://www.fastmoss.com/zh/e-commerce/detail/123456789&#10;https://www.fastmoss.com/zh/e-commerce/detail/987654321&#10;https://www.fastmoss.com/zh/e-commerce/detail/456789123"
+                value={urlsText}
+                onChange={(e) => setUrlsText(e.target.value)}
+                disabled={isSubmitting}
+                rows={8}
+                className="font-mono text-sm border-2 focus:border-primary/50 transition-colors resize-none"
+              />
+              {urlsText && (
+                <div className="absolute top-2 right-2">
+                  <div className="bg-primary/10 text-primary px-2 py-1 rounded-md text-xs font-medium">
+                    {urlsText.split('\n').filter(url => url.trim()).length} URLs
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-start gap-2 text-sm text-muted-foreground">
+              <svg className="h-4 w-4 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p>• 每行输入一个FastMoss商品页面URL</p>
+                <p>• 支持同时处理多个商品页面</p>
+                <p>• 系统会自动提取商品ID并开始抓取</p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          {/* 备注输入区域 */}
+          <div className="space-y-3">
+            <Label htmlFor="remark" className="text-base font-semibold flex items-center gap-2">
+              <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+              </svg>
+              任务备注
+              <span className="text-sm font-normal text-muted-foreground">（可选）</span>
+            </Label>
+            <Textarea
+              id="remark"
+              placeholder="为这个任务添加备注信息，比如：&#10;• 测试环境数据抓取&#10;• 重点关注销量数据&#10;• 仅抓取前10页数据"
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              disabled={isSubmitting}
+              rows={4}
+              className="border-2 focus:border-primary/50 transition-colors resize-none"
+            />
+            <p className="text-sm text-muted-foreground">
+              添加备注可以帮助您更好地管理和识别不同的抓取任务
+            </p>
+          </div>
+
+          {/* 操作按钮区域 */}
+          <div className="flex gap-3 pt-6 border-t">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 bg-transparent"
+              className="flex-1 h-11 text-base font-medium"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
             >
               取消
             </Button>
-            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+            <Button 
+              type="submit" 
+              className="flex-1 h-11 text-base font-medium bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70" 
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   创建中...
                 </>
               ) : (
-                "创建任务"
+                <>
+                  <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  创建任务
+                </>
               )}
             </Button>
           </div>

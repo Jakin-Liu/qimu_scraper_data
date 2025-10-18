@@ -10,12 +10,16 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
     csv_url TEXT,
-    error TEXT
+    error TEXT,
+    remark TEXT
 );
 
 -- 创建索引以优化查询性能
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+
+-- 为现有表添加备注字段（如果表已存在）
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS remark TEXT;
 
 -- 创建数据抓取结果表
 CREATE TABLE IF NOT EXISTS scraping_results (
