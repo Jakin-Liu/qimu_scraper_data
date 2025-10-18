@@ -22,19 +22,18 @@ export default function Home() {
         </div>
 
         <div className="flex-1" />
-
-        <div className="p-4 border-t">
-          <Button className="w-full gap-2" onClick={() => setIsDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            新建任务
-          </Button>
-        </div>
       </aside>
 
       <main className="flex-1 overflow-auto">
         <div className="container mx-auto px-8 py-8 max-w-6xl">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold mb-4">任务列表</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold">任务列表</h2>
+              <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
+                <Plus className="h-4 w-4" />
+                新建任务
+              </Button>
+            </div>
             <div className="flex gap-2">
               <Button
                 variant={filterStatus === "all" ? "default" : "outline"}
