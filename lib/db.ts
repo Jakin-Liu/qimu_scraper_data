@@ -275,6 +275,54 @@ export const scrapingResultQueries = {
     } finally {
       client.release()
     }
+  },
+
+  // 根据达人ID搜索商品数据
+  async searchByInfluencerId(influencerId: string, limit = 20, offset = 0) {
+    const client = await pool.connect()
+    try {
+      const result = await client.query(`
+        SELECT id, task_id, task_url, influencer_name, influencer_followers, 
+               country_region, fastmoss_detail_url, product_sales_count, 
+               product_sales_amount, influencer_id, sale_amount_show, 
+               raw_data, status, created_at, updated_at
+        FROM scraping_results
+        WHERE influencer_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+      `, [influencerId, limit, offset])
+      return result.rows
+    } finally {
+      client.release()
+    }
+  },
+
+  // 根据达人ID统计总数
+  async countByInfluencerId(influencerId: string) {
+    const client = await pool.connect()
+    try {
+      const result = await client.query(`
+        SELECT COUNT(*) as count
+        FROM scraping_results
+        WHERE influencer_id = $1
+      `, [influencerId])
+      return parseInt(result.rows[0].count)
+    } finally {
+      client.release()
+    }
+  },
+
+  async countAllResults() {
+    const client = await pool.connect()
+    try {
+      const result = await client.query(`
+        SELECT COUNT(*) as count
+        FROM scraping_results
+      `)
+      return parseInt(result.rows[0].count)
+    } finally {
+      client.release()
+    }
   }
 }
 

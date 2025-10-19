@@ -214,20 +214,6 @@ export function TaskList({ filterStatus }: TaskListProps) {
     router.push(`/tasks/${taskId}`)
   }
 
-  const getTitle = () => {
-    switch (filterStatus) {
-      case "all":
-        return "全部任务"
-      case "pending":
-        return "等待中的任务"
-      case "processing":
-        return "处理中的任务"
-      case "completed":
-        return "已完成的任务"
-      case "failed":
-        return "失败的任务"
-    }
-  }
 
   if (isLoading) {
     return (
@@ -239,11 +225,7 @@ export function TaskList({ filterStatus }: TaskListProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{getTitle()}</h2>
-          <p className="text-muted-foreground mt-1">共 {filteredTasks.length} 个任务</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button variant="outline" size="icon" onClick={fetchTasks}>
           <RefreshCw className="h-4 w-4" />
         </Button>
