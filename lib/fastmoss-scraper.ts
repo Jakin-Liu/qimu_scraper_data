@@ -452,9 +452,6 @@ async function scrapeSinglePage(productId: string, authInfo: AuthInfo, page: num
         status: 'active'
       }
 
-      console.log('result *******************')
-      console.log(JSON.stringify(result, null, 2))
-      console.log('result *******************')
       pageResults.push(result)
     }
 
