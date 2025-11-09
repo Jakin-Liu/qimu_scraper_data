@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ListTodo, Search } from "lucide-react"
+import { ListTodo, Search, MessageSquare } from "lucide-react"
 import InfluencerSearch from "@/components/influencer-search"
 
 export default function SearchPage() {
@@ -28,6 +28,14 @@ export default function SearchPage() {
             >
               <ListTodo className="h-4 w-4" />
               任务管理
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2"
+              onClick={() => router.push('/tiktok-reviews')}
+            >
+              <MessageSquare className="h-4 w-4" />
+              TK 评论任务管理
             </Button>
             <Button
               variant="default"
