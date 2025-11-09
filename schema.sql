@@ -207,8 +207,14 @@ CREATE TABLE IF NOT EXISTS tiktok_reviews (
 );
 
 -- 创建唯一约束：task_id + sub_task_id + review_id 作为唯一键
+-- 注意：由于 review_id 可能为 NULL，我们使用部分唯一索引
+-- 但为了支持 ON CONFLICT，我们需要确保 review_id 不为 NULL 时才应用唯一约束
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tiktok_reviews_unique ON tiktok_reviews(task_id, sub_task_id, review_id) 
 WHERE review_id IS NOT NULL;
+
+-- 如果 review_id 可能为 NULL，我们需要在应用层处理唯一性
+-- 或者创建一个包含所有情况的唯一约束（但这会导致 NULL 值的问题）
+-- 由于 PostgreSQL 中 NULL 值在唯一约束中会被视为不同，我们需要使用部分唯一索引
 
 -- 创建索引以优化查询性能
 CREATE INDEX IF NOT EXISTS idx_tiktok_reviews_sub_task_id ON tiktok_reviews(sub_task_id);
