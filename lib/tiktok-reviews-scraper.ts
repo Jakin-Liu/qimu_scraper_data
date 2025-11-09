@@ -228,70 +228,92 @@ export async function scrapeTikTokReviews(
 
     // 如果不是恢复模式，获取第一页以确定总评论数
     if (!isResume) {
-      try {
-        const firstPageData = await scrapeSinglePage(productId, 1, url)
-        const totalReviewsCount = parseInt(firstPageData.total_reviews || '0')
-        totalPages = Math.ceil(totalReviewsCount / SCRAPING_CONFIG.PAGE_SIZE)
-        
-        console.log(`商品 ${productId} 总评论数: ${totalReviewsCount}, 预计页数: ${totalPages}`)
+      let firstPageSuccess = false
+      let firstPageRetryCount = 0
+      let firstPageError: Error | null = null
 
-        // 更新子任务总页数
-        await tiktokSubTaskQueries.updateSubTaskProgress(
-          subTaskId,
-          0,
-          totalPages,
-          0
-        )
-
-        // 处理第一页数据
-        if (firstPageData.product_reviews && firstPageData.product_reviews.length > 0) {
-          // 过滤出2024年之后的数据
-          const validReviews = firstPageData.product_reviews.filter(review => {
-            if (!review.review_time) return true // 如果没有时间戳，默认保留
-            return isReviewAfter2024(review.review_time)
-          })
-
-          // 检查是否有2024年之前的数据
-          if (validReviews.length < firstPageData.product_reviews.length) {
-            console.log(`第 1 页发现 ${firstPageData.product_reviews.length - validReviews.length} 条2024年之前的数据，将在处理完当前页后停止抓取`)
-            shouldStop = true
+      // 尝试获取第一页，最多重试 MAX_RETRIES_PER_PAGE 次
+      while (!firstPageSuccess && firstPageRetryCount <= SCRAPING_CONFIG.MAX_RETRIES_PER_PAGE) {
+        try {
+          if (firstPageRetryCount > 0) {
+            console.log(`获取第1页数据重试第 ${firstPageRetryCount} 次...`)
+            await new Promise(resolve => setTimeout(resolve, SCRAPING_CONFIG.RETRY_DELAY))
           }
 
-          if (validReviews.length > 0) {
-            const reviews = validReviews.map(review =>
-              convertReviewToDbFormat(review, subTaskId, taskId)
-            )
-            
-            await tiktokReviewQueries.createReviews(reviews)
-            totalReviews += reviews.length
-            console.log(`第 1 页数据已写入数据库，${reviews.length} 条记录（过滤后）`)
+          const firstPageData = await scrapeSinglePage(productId, 1, url)
+          const totalReviewsCount = parseInt(firstPageData.total_reviews || '0')
+          totalPages = Math.ceil(totalReviewsCount / SCRAPING_CONFIG.PAGE_SIZE)
+          
+          console.log(`商品 ${productId} 总评论数: ${totalReviewsCount}, 预计页数: ${totalPages}`)
 
-            // 更新子任务进度
-            await tiktokSubTaskQueries.updateSubTaskProgress(
-              subTaskId,
-              1,
-              totalPages,
-              totalReviews
-            )
-          }
+          // 更新子任务总页数
+          await tiktokSubTaskQueries.updateSubTaskProgress(
+            subTaskId,
+            0,
+            totalPages,
+            0
+          )
 
-          // 如果发现2024年之前的数据，停止抓取
-          if (shouldStop) {
-            console.log(`已遇到2024年之前的数据，停止抓取`)
-            hasMore = false
+          // 处理第一页数据
+          if (firstPageData.product_reviews && firstPageData.product_reviews.length > 0) {
+            // 过滤出2024年之后的数据
+            const validReviews = firstPageData.product_reviews.filter(review => {
+              if (!review.review_time) return true // 如果没有时间戳，默认保留
+              return isReviewAfter2024(review.review_time)
+            })
+
+            // 检查是否有2024年之前的数据
+            if (validReviews.length < firstPageData.product_reviews.length) {
+              console.log(`第 1 页发现 ${firstPageData.product_reviews.length - validReviews.length} 条2024年之前的数据，将在处理完当前页后停止抓取`)
+              shouldStop = true
+            }
+
+            if (validReviews.length > 0) {
+              const reviews = validReviews.map(review =>
+                convertReviewToDbFormat(review, subTaskId, taskId)
+              )
+              
+              await tiktokReviewQueries.createReviews(reviews)
+              totalReviews += reviews.length
+              console.log(`第 1 页数据已写入数据库，${reviews.length} 条记录（过滤后）`)
+
+              // 更新子任务进度
+              await tiktokSubTaskQueries.updateSubTaskProgress(
+                subTaskId,
+                1,
+                totalPages,
+                totalReviews
+              )
+            }
+
+            // 如果发现2024年之前的数据，停止抓取
+            if (shouldStop) {
+              console.log(`已遇到2024年之前的数据，停止抓取`)
+              hasMore = false
+            } else {
+              hasMore = firstPageData.has_more
+              pageStart = 2 // 从第2页开始
+            }
           } else {
             hasMore = firstPageData.has_more
             pageStart = 2 // 从第2页开始
           }
-        } else {
-          hasMore = firstPageData.has_more
-          pageStart = 2 // 从第2页开始
-        }
-      } catch (error) {
-        console.error(`获取第1页数据失败:`, error)
-        consecutiveFailures++
-        if (consecutiveFailures >= SCRAPING_CONFIG.MAX_CONSECUTIVE_FAILURES) {
-          throw new Error(`连续失败 ${consecutiveFailures} 次，停止抓取`)
+          
+          firstPageSuccess = true // 标记第一页成功
+        } catch (error) {
+          firstPageError = error instanceof Error ? error : new Error(String(error))
+          firstPageRetryCount++
+          
+          if (firstPageRetryCount <= SCRAPING_CONFIG.MAX_RETRIES_PER_PAGE) {
+            console.error(`获取第1页数据失败（第 ${firstPageRetryCount} 次尝试）:`, firstPageError.message)
+          } else {
+            console.error(`获取第1页数据失败，已重试 ${SCRAPING_CONFIG.MAX_RETRIES_PER_PAGE} 次:`, firstPageError.message)
+            consecutiveFailures++
+            if (consecutiveFailures >= SCRAPING_CONFIG.MAX_CONSECUTIVE_FAILURES) {
+              throw new Error(`连续失败 ${consecutiveFailures} 次，停止抓取`)
+            }
+            throw firstPageError // 重试次数用完，抛出错误
+          }
         }
       }
     } else {

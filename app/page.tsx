@@ -18,7 +18,7 @@ export default function Home() {
         <div className="p-6 border-b">
           <div className="flex items-center gap-2 mb-1">
             <ListTodo className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-bold text-balance">数据抓取</h1>
+            <h1 className="text-xl font-bold text-balance">七木科技后台管理系统</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">任务管理系统</p>
         </div>
@@ -30,7 +30,7 @@ export default function Home() {
               className="w-full justify-start gap-2"
             >
               <ListTodo className="h-4 w-4" />
-              任务管理
+              TK带货达人任务管理
             </Button>
             <Button
               variant="ghost"
@@ -38,7 +38,7 @@ export default function Home() {
               onClick={() => router.push('/tiktok-reviews')}
             >
               <MessageSquare className="h-4 w-4" />
-              TK 评论爬虫
+              TK 商品评论任务管理
             </Button>
             <Button
               variant="ghost"
@@ -46,7 +46,7 @@ export default function Home() {
               onClick={() => router.push('/search')}
             >
               <Search className="h-4 w-4" />
-              数据检索
+              TK带货达人数据检索
             </Button>
           </nav>
         </div>
